@@ -35,7 +35,6 @@ fi
 /usr/bin/cp bazelignore ${SOURCE_DIR}/.bazelignore
 
 /usr/bin/cp -rf src/envoy/tcp/sni_verifier/* ${SOURCE_DIR}/src/envoy/tcp/sni_verifier/
-/usr/bin/cp -rf src/envoy/http/jwt_auth/* ${SOURCE_DIR}/src/envoy/http/jwt_auth/
 
 cp openssl.BUILD ${SOURCE_DIR}
 
@@ -97,11 +96,107 @@ ADD_TEXT="        \":openssl_impl_lib\",
         \"@envoy//source/exe:envoy_common_lib\","
 replace_text
 
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="RSA_public_key_from_bytes"
+DELETE_STOP_PATTERN="return EvpPkeyFromRsa"
+START_OFFSET="-1"
+ADD_TEXT="    RSA* rsa(RSA_new());
+    const unsigned char *pp = (const unsigned char *)pkey_der.c_str();
+    d2i_RSAPublicKey(&rsa, &pp, pkey_der.length());
+    if (!rsa) {
+      UpdateStatus(Status::PEM_PUBKEY_PARSE_ERROR);
+    }
+    bssl::UniquePtr<EVP_PKEY> result = EvpPkeyFromRsa(rsa);
 
+    RSA_free(rsa);
 
+    return result;"
+replace_text
 
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="bssl::UniquePtr<BIGNUM> bn_x = BigNumFromBase64UrlString(x);"
+DELETE_STOP_PATTERN="bssl::UniquePtr<BIGNUM> bn_y = BigNumFromBase64UrlString(y);"
+START_OFFSET="0"
+ADD_TEXT="    BIGNUM* bn_x = BigNumFromBase64UrlString(x);
+    BIGNUM* bn_y = BigNumFromBase64UrlString(y);"
+replace_text
 
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="if (EC_KEY_set_public_key_affine_coordinates(ec_key.get(), bn_x.get(),"
+DELETE_STOP_PATTERN="return ec_key;"
+START_OFFSET="0"
+ADD_TEXT="    if (EC_KEY_set_public_key_affine_coordinates(ec_key.get(), bn_x,
+                                                 bn_y) == 0) {
+      BN_free(bn_x);
+      BN_free(bn_y);
 
+      UpdateStatus(Status::JWK_EC_PUBKEY_PARSE_ERROR);
+      return nullptr;
+    }
 
+    BN_free(bn_x);
+    BN_free(bn_y);
+
+    return ec_key;"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="bssl::UniquePtr<BIGNUM> BigNumFromBase64UrlString(const std::string &s) {"
+DELETE_STOP_PATTERN=""
+START_OFFSET="0"
+ADD_TEXT="  BIGNUM* BigNumFromBase64UrlString(const std::string &s) {"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="return bssl::UniquePtr<BIGNUM>("
+DELETE_STOP_PATTERN="BN_bin2bn(CastToUChar(s_decoded), s_decoded.length(), NULL));"
+START_OFFSET="0"
+ADD_TEXT="    return BN_bin2bn(CastToUChar(s_decoded), s_decoded.length(), NULL);"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="rsa->n = BigNumFromBase64UrlString(n).release();"
+DELETE_STOP_PATTERN="rsa->e = BigNumFromBase64UrlString(e).release();"
+START_OFFSET="0"
+ADD_TEXT="    BIGNUM* rsa_n = BigNumFromBase64UrlString(n);
+    BIGNUM* rsa_e = BigNumFromBase64UrlString(e);"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="if (!rsa->n || !rsa->e) {"
+DELETE_STOP_PATTERN=""
+START_OFFSET="0"
+ADD_TEXT="if (!rsa_n || !rsa_e) {"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="return rsa;"
+DELETE_STOP_PATTERN=""
+START_OFFSET="0"
+ADD_TEXT="    int result = RSA_set0_key(rsa.get(), rsa_n, rsa_e, nullptr);
+
+    return rsa;"
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.cc"
+DELETE_START_PATTERN="BN_bin2bn(signature, 32, ecdsa_sig->r);"
+DELETE_STOP_PATTERN="return (ECDSA_do_verify(digest, SHA256_DIGEST_LENGTH, ecdsa_sig.get(), key) =="
+START_OFFSET="0"
+ADD_TEXT="  BIGNUM* pr(BN_new());
+  BIGNUM* ps(BN_new());
+  BN_bin2bn(signature, 32, pr);
+  BN_bin2bn(signature + 32, 32, ps);
+  ECDSA_SIG_set0(ecdsa_sig.get(), pr, ps);
+
+  return (ECDSA_do_verify(digest, SHA256_DIGEST_LENGTH, ecdsa_sig.get(), key) =="
+replace_text
+
+FILE="src/envoy/http/jwt_auth/jwt.h"
+DELETE_START_PATTERN="#include \"openssl/evp.h\""
+DELETE_STOP_PATTERN=""
+START_OFFSET="0"
+ADD_TEXT="#include \"openssl/evp.h\"
+#include \"bssl_wrapper/bssl_wrapper.h\""
+replace_text
 
 
