@@ -7,5 +7,4 @@ cc_library(
         "libcrypto.so.1.1",
     ],
     visibility = ["//visibility:public"],
-    linkstatic=False,
 )
