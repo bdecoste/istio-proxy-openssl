@@ -55,7 +55,7 @@ function replace_text() {
 }
 
 FILE="WORKSPACE"
-DELETE_START_PATTERN="bind"
+DELETE_START_PATTERN="bind("
 DELETE_STOP_PATTERN=")"
 START_OFFSET="0"
 ADD_TEXT="new_local_repository(
